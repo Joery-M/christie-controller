@@ -62,4 +62,8 @@ export class Projector {
       }
     }
   }
+
+  public static async getStatus() {
+    
+  }
 }
