@@ -128,4 +128,9 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# local test file
 test.ts
+
+# vite temporary file
+vite.config.*.timestamp*.mjs

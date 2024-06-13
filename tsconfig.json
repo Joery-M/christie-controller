@@ -1,10 +1,18 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "lib": ["ESNext"],
-    "strict": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler"
-  },
-  "include": ["src/**/*"]
+    "compilerOptions": {
+        "skipLibCheck": true,
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "target": "ESNext",
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "noEmit": true,
+        "allowImportingTsExtensions": true,
+        "outDir": "dist",
+        "lib": ["esnext"],
+        "types": ["node"],
+        "baseUrl": "./"
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "test-server"]
 }
