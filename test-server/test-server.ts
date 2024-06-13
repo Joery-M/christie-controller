@@ -1,9 +1,9 @@
 import {
-  createApp,
-  eventHandler,
-  getHeader,
-  setResponseHeader,
-  setResponseStatus,
+    createApp,
+    eventHandler,
+    getHeader,
+    setResponseHeader,
+    setResponseStatus,
 } from "h3";
 
 export const app = createApp();
@@ -13,14 +13,14 @@ export const app = createApp();
 //   eventHandler(() => "Hello world!")
 // );
 app.use(
-  "/security",
-  eventHandler((event) => {
-    const action = getHeader(event, "SOAPAction");
-    setResponseHeader(event, "Content-Type", "text/xml; charset=utf-8");
-    console.log(action);
-    switch (action) {
-      case "urn:security/login":
-        return `<?xml version="1.0" encoding="UTF-8"?>
+    "/security",
+    eventHandler((event) => {
+        const action = getHeader(event, "SOAPAction");
+        setResponseHeader(event, "Content-Type", "text/xml; charset=utf-8");
+        console.log(action);
+        switch (action) {
+            case "urn:security/login":
+                return `<?xml version="1.0" encoding="UTF-8"?>
     <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
         xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -32,23 +32,23 @@ app.use(
         </SOAP-ENV:Body>
     </SOAP-ENV:Envelope>`;
 
-      default:
-        setResponseStatus(event, 404);
-        return "";
-    }
-  })
+            default:
+                setResponseStatus(event, 404);
+                return "";
+        }
+    })
 );
 
 app.use(
-  "/cinemaprojector",
-  eventHandler((event) => {
-    const action = getHeader(event, "SOAPAction");
-    setResponseHeader(event, "Content-Type", "text/xml; charset=utf-8");
-    console.log(action);
+    "/cinemaprojector",
+    eventHandler((event) => {
+        const action = getHeader(event, "SOAPAction");
+        setResponseHeader(event, "Content-Type", "text/xml; charset=utf-8");
+        console.log(action);
 
-    switch (action) {
-      case "urn:cinemaprojector/getMainStatus":
-        return `<?xml version="1.0" encoding="UTF-8"?>
+        switch (action) {
+            case "urn:cinemaprojector/getMainStatus":
+                return `<?xml version="1.0" encoding="UTF-8"?>
 <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -70,8 +70,9 @@ app.use(
     </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>`;
 
-      default:
-        setResponseStatus(event, 404);
-        return "";
-  })
+            default:
+                setResponseStatus(event, 404);
+                return "";
+        }
+    })
 );
