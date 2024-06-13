@@ -61,14 +61,14 @@ export interface Channel {
 }
 
 export interface Events {
-    status: [status: ProjectorMainStatus];
-    power: [power: PowerState];
-    douser: [douser: DouserState];
-    lamp: [lamp: LampState];
-    alarm: [level: AlarmLevel];
-    activeChannel: [channelIndex: number];
-    authentication: [authenticated: boolean];
-    channels: [channels: Channel[]];
+    status: ProjectorMainStatus;
+    power: PowerState;
+    douser: DouserState;
+    lamp: LampState;
+    alarm: AlarmLevel;
+    activeChannel: number;
+    authentication: boolean;
+    channels: Channel[];
 }
 
 export interface ProjectorSettings {

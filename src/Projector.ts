@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from "axios";
+import deepEqual from "fast-deep-equal";
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import {
     Channel,
@@ -6,7 +7,8 @@ import {
     ProjectorMainStatus,
     ProjectorSettings,
 } from "./types";
-import EventEmitter from "events";
+import EventEmitter from "node:events";
+import { TypeSafeEventEmitter } from "typesafe-event-emitter";
 
 export class Projector {
     private token?: string;
@@ -39,12 +41,15 @@ export class Projector {
 
     public authenticated = false;
 
-    public events = new EventEmitter<Events>();
+    public events: TypeSafeEventEmitter<Events> = new EventEmitter();
 
     constructor(
         private host: string,
         private settings: ProjectorSettings = {}
     ) {
+        if (!this.host.startsWith("http")) {
+            this.host = `http://${this.host}`;
+        }
         this.api = axios.create({
             baseURL: this.host,
             headers: {
@@ -108,41 +113,49 @@ export class Projector {
             );
 
             if (res && res.status == 200) {
-                const status = res.data?.Notification;
+                const status = res.data?.Notification as ProjectorMainStatus;
 
                 const oldStatus = this.currentStatus;
                 this.currentStatus = status;
                 resolve(status);
 
-                this.events.emit("status", status);
-                if (this.currentStatus?.powerOn !== oldStatus?.powerOn) {
-                    this.events.emit(
-                        "power",
-                        this.currentStatus?.powerOn ?? -1
-                    );
-                }
-                if (this.currentStatus?.douserOn !== oldStatus?.douserOn) {
-                    this.events.emit(
-                        "douser",
-                        this.currentStatus?.douserOn ?? -1
-                    );
-                }
-                if (this.currentStatus?.lampOn !== oldStatus?.lampOn) {
-                    this.events.emit("lamp", this.currentStatus?.lampOn ?? -1);
-                }
-                if (this.currentStatus?.alarmLevel !== oldStatus?.alarmLevel) {
-                    this.events.emit(
-                        "alarm",
-                        this.currentStatus?.alarmLevel ?? 0
-                    );
-                }
-                if (
-                    this.currentStatus?.activeIndex !== oldStatus?.activeIndex
-                ) {
-                    this.events.emit(
-                        "activeChannel",
-                        this.currentStatus?.activeIndex ?? 0
-                    );
+                if (!deepEqual(status, oldStatus)) {
+                    this.events.emit("status", status);
+                    if (this.currentStatus?.powerOn !== oldStatus?.powerOn) {
+                        this.events.emit(
+                            "power",
+                            this.currentStatus?.powerOn ?? -1
+                        );
+                    }
+                    if (this.currentStatus?.douserOn !== oldStatus?.douserOn) {
+                        this.events.emit(
+                            "douser",
+                            this.currentStatus?.douserOn ?? -1
+                        );
+                    }
+                    if (this.currentStatus?.lampOn !== oldStatus?.lampOn) {
+                        this.events.emit(
+                            "lamp",
+                            this.currentStatus?.lampOn ?? -1
+                        );
+                    }
+                    if (
+                        this.currentStatus?.alarmLevel !== oldStatus?.alarmLevel
+                    ) {
+                        this.events.emit(
+                            "alarm",
+                            this.currentStatus?.alarmLevel ?? 0
+                        );
+                    }
+                    if (
+                        this.currentStatus?.activeIndex !==
+                        oldStatus?.activeIndex
+                    ) {
+                        this.events.emit(
+                            "activeChannel",
+                            this.currentStatus?.activeIndex ?? 0
+                        );
+                    }
                 }
             }
             reject();
