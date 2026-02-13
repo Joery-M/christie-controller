@@ -73,15 +73,6 @@ export interface Events {
 
 export interface ProjectorSettings {
     /**
-     * Interval timeout in milliseconds.
-     *
-     * Set to -1 to disable periodical status fetching.
-     *
-     * @default 5000
-     */
-    getStatusInterval?: number;
-
-    /**
      * Whether to get the channels when logged in
      *
      * @default true

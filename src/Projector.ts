@@ -10,7 +10,7 @@ import {
 import EventEmitter from "node:events";
 import { TypeSafeEventEmitter } from "typesafe-event-emitter";
 
-export class Projector implements Disposable {
+export class Projector {
     private token?: string;
 
     private api: AxiosInstance;
@@ -19,8 +19,6 @@ export class Projector implements Disposable {
     private xmlParser = new XMLParser({
         ignoreAttributes: false,
     });
-
-    private getStatusInterval?: ReturnType<typeof setInterval>;
 
     // Public
     private _currentStatus?: ProjectorMainStatus;
@@ -60,7 +58,7 @@ export class Projector implements Disposable {
 
     public async logIn(username: string, password: string): Promise<boolean> {
         const res = await this.request("security", "login", {
-            token: "blank_token",
+            token: "",
             username,
             password,
         });
@@ -70,12 +68,6 @@ export class Projector implements Disposable {
                 this.token = token;
                 this.authenticated = true;
                 this.events.emit("authentication", this.authenticated);
-
-                if ((this.settings.getStatusInterval ?? 5000) > 0) {
-                    this.getStatusInterval = setInterval(() => {
-                        this.getStatus();
-                    }, this.settings.getStatusInterval ?? 5000);
-                }
 
                 if (this.settings.getChannelsOnLogin !== false) {
                     this.getChannels();
@@ -289,9 +281,5 @@ export class Projector implements Disposable {
             console.error(error);
             return undefined;
         }
-    }
-
-    [Symbol.dispose](): void {
-        clearInterval(this.getStatusInterval);
     }
 }

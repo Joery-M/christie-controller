@@ -3,10 +3,8 @@
         "module": "ESNext",
         "moduleResolution": "bundler",
         "target": "ESNext",
-        "isolatedModules": true,
-        "isolatedDeclarations": true,
-        "declaration": true,
+        "composite": true,
         "types": ["node"]
     },
-    "references": [{ "path": "./tsconfig.node.json" }]
+    "include": ["./*.ts"]
 }
