@@ -10,7 +10,7 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
-        "h3": "^1.11.1",
+        "h3": "2.0.1-rc.14",
         "listhen": "^1.7.2"
     }
 }

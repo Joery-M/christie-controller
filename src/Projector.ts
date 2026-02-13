@@ -10,7 +10,7 @@ import {
 import EventEmitter from "node:events";
 import { TypeSafeEventEmitter } from "typesafe-event-emitter";
 
-export class Projector {
+export class Projector implements Disposable {
     private token?: string;
 
     private api: AxiosInstance;
@@ -32,7 +32,7 @@ export class Projector {
     }
 
     private _channels: Channel[] = [];
-    public get channels() {
+    public get channels(): Channel[] {
         return this._channels;
     }
     private set channels(value: Channel[]) {
@@ -45,7 +45,7 @@ export class Projector {
 
     constructor(
         private host: string,
-        private settings: ProjectorSettings = {}
+        private settings: ProjectorSettings = {},
     ) {
         if (!this.host.startsWith("http")) {
             this.host = `http://${this.host}`;
@@ -58,14 +58,11 @@ export class Projector {
         });
     }
 
-    public async logIn(username: string, password: string) {
-        const res = await this.request("urn:security/login", {
-            login: {
-                token: "blank_token",
-                username,
-                password,
-                "@_xmlns": "urn:security",
-            },
+    public async logIn(username: string, password: string): Promise<boolean> {
+        const res = await this.request("security", "login", {
+            token: "blank_token",
+            username,
+            password,
         });
         if (res && res.status == 200) {
             const token = res.data["ns:loginResponse"]?.token;
@@ -97,20 +94,12 @@ export class Projector {
         return false;
     }
 
-    public getStatus() {
+    public getStatus(): Promise<ProjectorMainStatus> {
         if (!this.token) {
             throw new Error("Tried getting status without token.");
         }
         return new Promise<ProjectorMainStatus>(async (resolve, reject) => {
-            const res = await this.request(
-                "urn:cinemaprojector/getMainStatus",
-                {
-                    getMainStatus: {
-                        token: this.token,
-                        "@_xmlns": "urn:cinemaprojector",
-                    },
-                }
-            );
+            const res = await this.request("cinemaprojector", "getMainStatus");
 
             if (res && res.status == 200) {
                 const status = res.data?.Notification as ProjectorMainStatus;
@@ -124,19 +113,19 @@ export class Projector {
                     if (this.currentStatus?.powerOn !== oldStatus?.powerOn) {
                         this.events.emit(
                             "power",
-                            this.currentStatus?.powerOn ?? -1
+                            this.currentStatus?.powerOn ?? -1,
                         );
                     }
                     if (this.currentStatus?.douserOn !== oldStatus?.douserOn) {
                         this.events.emit(
                             "douser",
-                            this.currentStatus?.douserOn ?? -1
+                            this.currentStatus?.douserOn ?? -1,
                         );
                     }
                     if (this.currentStatus?.lampOn !== oldStatus?.lampOn) {
                         this.events.emit(
                             "lamp",
-                            this.currentStatus?.lampOn ?? -1
+                            this.currentStatus?.lampOn ?? -1,
                         );
                     }
                     if (
@@ -144,7 +133,7 @@ export class Projector {
                     ) {
                         this.events.emit(
                             "alarm",
-                            this.currentStatus?.alarmLevel ?? 0
+                            this.currentStatus?.alarmLevel ?? 0,
                         );
                     }
                     if (
@@ -153,7 +142,7 @@ export class Projector {
                     ) {
                         this.events.emit(
                             "activeChannel",
-                            this.currentStatus?.activeIndex ?? 0
+                            this.currentStatus?.activeIndex ?? 0,
                         );
                     }
                 }
@@ -162,21 +151,18 @@ export class Projector {
         });
     }
 
-    public async setPower(power: boolean) {
+    public async setPower(power: boolean): Promise<void> {
         if (!this.token) {
             console.error("Tried getting status without token.");
             return;
         }
 
         const res = await this.request(
-            "urn:cinemaprojector/enableProjectorPower",
+            "cinemaprojector",
+            "enableProjectorPower",
             {
-                enableProjectorPower: {
-                    token: this.token,
-                    power: power ? 1 : 0,
-                    "@_xmlns": "urn:cinemaprojector",
-                },
-            }
+                power: power ? 1 : 0,
+            },
         );
 
         if (
@@ -188,22 +174,16 @@ export class Projector {
         }
     }
 
-    public async setDouser(open: boolean) {
+    public async setDouser(open: boolean): Promise<void> {
         if (!this.token) {
             console.error("Tried getting status without token.");
             return;
         }
 
-        const res = await this.request(
-            "urn:cinemaprojector/setDouserPosition",
-            {
-                setDouserPosition: {
-                    token: this.token,
-                    douser: open ? 0 : 1, // 0 is open
-                    "@_xmlns": "urn:cinemaprojector",
-                },
-            }
-        );
+        const res = await this.request("cinemaprojector", "setDouserPosition", {
+            token: this.token,
+            douser: open ? 0 : 1, // 0 is open
+        });
 
         if (
             res &&
@@ -214,13 +194,10 @@ export class Projector {
         }
     }
 
-    public async setLamp(on: boolean) {
-        const res = await this.request("urn:cinemaprojector/enableLamp", {
-            enableLamp: {
-                token: this.token,
-                lamp: on ? 1 : 0,
-                "@_xmlns": "urn:cinemaprojector",
-            },
+    public async setLamp(on: boolean): Promise<void> {
+        const res = await this.request("cinemaprojector", "enableLamp", {
+            token: this.token,
+            lamp: on ? 1 : 0,
         });
 
         if (
@@ -232,14 +209,11 @@ export class Projector {
         }
     }
 
-    public async getChannels() {
-        const res = await this.request("urn:cinemaprojector/getAllChannels", {
-            getAllChannels: {
-                token: this.token,
-                start: 1,
-                end: 65,
-                "@_xmlns": "urn:cinemaprojector",
-            },
+    public async getChannels(): Promise<Channel[]> {
+        const res = await this.request("cinemaprojector", "getAllChannels", {
+            token: this.token,
+            start: 1,
+            end: 65,
         });
 
         if (res && res.data) {
@@ -257,19 +231,17 @@ export class Projector {
         return [];
     }
 
-    public async setChannel(index: number) {
+    public async setChannel(index: number): Promise<void> {
         if (index > 64 || index < 1) {
             throw new Error("Channel index out of range, range is 1-64");
         }
         const res = await this.request(
-            "urn:cinemaprojector/setChannelActiveIndex",
+            "cinemaprojector",
+            "setChannelActiveIndex",
             {
-                setChannelActiveIndex: {
-                    token: this.token,
-                    index: index,
-                    "@_xmlns": "urn:cinemaprojector",
-                },
-            }
+                token: this.token,
+                index: index,
+            },
         );
 
         if (
@@ -281,27 +253,31 @@ export class Projector {
         }
     }
 
-    private async request(action: string, bodyJson: any) {
+    private async request(
+        namespace: string,
+        action: string,
+        bodyJson: Record<string, unknown> = {},
+    ) {
         const body = this.xmlBuilder.build({
             "?xml": { "@_version": "1.0", "@_encoding": "utf-8" },
             "soap:Envelope": {
-                "soap:Body": bodyJson,
+                "soap:Body": {
+                    [action]: {
+                        token: this.token,
+                        "@_xmlns": `urn:${namespace}`,
+                        ...bodyJson,
+                    },
+                },
                 "@_xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
                 "@_xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
                 "@_xmlns:soap": "http://schemas.xmlsoap.org/soap/envelope/",
             },
         });
-        const pathRegex = /(?<=urn:).*?\//;
-        const path = pathRegex.exec(action)?.[0];
-
-        if (!path) {
-            console.warn("Path could not be extracted from action", action);
-        }
 
         try {
-            const req = await this.api.post<any>("/" + path, body, {
+            const req = await this.api.post<any>("/" + namespace, body, {
                 headers: {
-                    SOAPAction: action,
+                    SOAPAction: `urn:${namespace}/${action}`,
                 },
                 responseType: "text",
             });
@@ -315,7 +291,7 @@ export class Projector {
         }
     }
 
-    public async destroy() {
+    [Symbol.dispose](): void {
         clearInterval(this.getStatusInterval);
     }
 }

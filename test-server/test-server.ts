@@ -1,23 +1,12 @@
-import {
-    createApp,
-    eventHandler,
-    getHeader,
-    readBody,
-    setResponseHeader,
-    setResponseStatus,
-} from "h3";
+import { eventHandler, H3, setResponseStatus } from "h3";
 
-export const app = createApp();
+export const app = new H3();
 
-// app.use(
-//   "/",
-//   eventHandler(() => "Hello world!")
-// );
 app.use(
     "/security",
     eventHandler((event) => {
-        const action = getHeader(event, "SOAPAction");
-        setResponseHeader(event, "Content-Type", "text/xml; charset=utf-8");
+        const action = event.req.headers.get("SOAPAction");
+        event.res.headers.append("Content-Type", "text/xml; charset=utf-8");
         console.log(action);
         switch (action) {
             case "urn:security/login":
@@ -34,10 +23,10 @@ app.use(
     </SOAP-ENV:Envelope>`;
 
             default:
-                setResponseStatus(event, 404);
+                event.res.status = 404;
                 return "";
         }
-    })
+    }),
 );
 
 let isOff = 0;
@@ -48,8 +37,8 @@ let alarmLevel = 0;
 app.use(
     "/cinemaprojector",
     eventHandler(async (event) => {
-        const action = getHeader(event, "SOAPAction");
-        setResponseHeader(event, "Content-Type", "text/xml; charset=utf-8");
+        const action = event.req.headers.get("SOAPAction");
+        event.res.headers.append("Content-Type", "text/xml; charset=utf-8");
         console.log(action);
 
         switch (action) {
@@ -78,7 +67,7 @@ app.use(
 
             case "urn:cinemaprojector/enableProjectorPower": {
                 const isOffRegex = /(?<=<power>)[0-9](?=<\/power>)/;
-                const body = await readBody(event);
+                const body = await event.req.text();
                 // Invert cause why tf would it make sense
                 isOff =
                     parseInt(isOffRegex.exec(body)?.[0] ?? "0") == 0 ? 1 : 0;
@@ -96,8 +85,8 @@ app.use(
             }
 
             default:
-                setResponseStatus(event, 404);
+                event.res.status = 404;
                 return "";
         }
-    })
+    }),
 );
