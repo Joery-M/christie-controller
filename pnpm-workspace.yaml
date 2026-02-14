@@ -1,2 +1,5 @@
 packages:
   - test-server
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'

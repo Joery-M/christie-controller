@@ -9,6 +9,10 @@
             "dev": "./src/index.ts",
             "default": "./dist/index.mjs"
         },
+        "./types": {
+            "dev": "./src/types.ts",
+            "default": "./dist/types.mjs"
+        },
         "./package.json": "./package.json"
     },
     "scripts": {
@@ -24,22 +28,25 @@
     "author": "Joery Münninghoff",
     "license": "MIT",
     "engines": {
-        "node": ">= 16"
+        "node": ">= 18"
     },
     "devDependencies": {
+        "@types/debug": "^4.1.12",
         "@types/node": "^25.2.3",
         "tsdown": "^0.20.3"
     },
     "dependencies": {
-        "axios": "^1.13.5",
-        "fast-deep-equal": "^3.1.3",
+        "@vue/reactivity": "^3.5.28",
+        "debug": "^4.4.3",
         "fast-xml-parser": "^5.3.5",
-        "typesafe-event-emitter": "^1.1.0"
+        "set-interval-async": "^3.0.3",
+        "ufo": "^1.6.3"
     },
     "packageManager": "pnpm@10.29.3+sha512.498e1fb4cca5aa06c1dcf2611e6fafc50972ffe7189998c409e90de74566444298ffe43e6cd2acdc775ba1aa7cc5e092a8b7054c811ba8c5770f84693d33d2dc",
     "publishConfig": {
         "exports": {
             ".": "./dist/index.mjs",
+            "./types": "./dist/types.mjs",
             "./package.json": "./package.json"
         }
     }

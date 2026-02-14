@@ -1,20 +1,20 @@
 export interface ProjectorMainStatus {
-    powerOn: PowerState;
-    lampOn: LampState;
-    douserOn: DouserState;
-    auxLensOn: number;
-    lampLOCDoAutoStatus: number;
-    lampLOCStatus: number;
-    testOn: number;
-    testSelectedTotal: number;
-    malmInstalled: number;
-    alarmLevel: AlarmLevel;
+    powerOn: PowerState | null;
+    lampOn: LampState | null;
+    douserOn: DouserState | null;
+    auxLensOn: number | null;
+    lampLOCDoAutoStatus: number | null;
+    lampLOCStatus: number | null;
+    testOn: number | null;
+    testSelectedTotal: number | null;
+    malmInstalled: number | null;
+    alarmLevel: AlarmLevel | null;
     /**
      * Current channel index.
      *
      * @range 1-64
      */
-    activeIndex: number;
+    activeIndex: number | null;
 }
 
 export enum PowerState {
@@ -37,8 +37,9 @@ export enum LampState {
 }
 
 export enum AlarmLevel {
-    CRITICAL = 2,
+    UNKNOWN = -1,
     NONE = 0,
+    CRITICAL = 2,
 }
 
 export interface Channel {
@@ -60,28 +61,29 @@ export interface Channel {
     icon: string;
 }
 
-export interface Events {
-    status: ProjectorMainStatus;
-    power: PowerState;
-    douser: DouserState;
-    lamp: LampState;
-    alarm: AlarmLevel;
-    activeChannel: number;
-    authentication: boolean;
-    channels: Channel[];
-}
-
 export interface ProjectorSettings {
     /**
      * Whether to get the channels when logged in
      *
-     * @default true
+     * @default false
      */
     getChannelsOnLogin?: boolean;
     /**
      * Whether to get the current status when logged in
      *
-     * @default true
+     * @default false
      */
     getStatusOnLogin?: boolean;
+    /**
+     * Disable cache
+     *
+     * @default false
+     */
+    disableCache?: boolean;
+    /**
+     * Cache time-to-live in seconds
+     *
+     * @default 10 seconds
+     */
+    cacheTTL?: number;
 }

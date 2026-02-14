@@ -1,59 +1,58 @@
-import axios, { AxiosInstance } from "axios";
-import deepEqual from "fast-deep-equal";
+import { readonly, toRaw, watch } from "@vue/reactivity";
+import debug from "debug";
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import {
-    Channel,
-    Events,
-    ProjectorMainStatus,
-    ProjectorSettings,
-} from "./types";
-import EventEmitter from "node:events";
-import { TypeSafeEventEmitter } from "typesafe-event-emitter";
+    clearIntervalAsync,
+    setIntervalAsync,
+    SetIntervalAsyncTimer,
+} from "set-interval-async/fixed";
+import { joinURL, parseURL, stringifyParsedURL } from "ufo";
+import { isDeepStrictEqual } from "util";
+import { ResultCache } from "./cache";
+import { ProjectorState } from "./state";
+import { Channel, ProjectorMainStatus, ProjectorSettings } from "./types";
 
-export class Projector {
+const deepEqual = (v1: any, v2: any) => isDeepStrictEqual(v1, v2, { skipPrototype: true });
+
+export class Projector implements Disposable {
     private token?: string;
 
-    private api: AxiosInstance;
+    private cache: ResultCache;
 
     private xmlBuilder = new XMLBuilder({ ignoreAttributes: false });
     private xmlParser = new XMLParser({
         ignoreAttributes: false,
     });
 
-    // Public
-    private _currentStatus?: ProjectorMainStatus;
-    public get currentStatus(): ProjectorMainStatus | undefined {
-        return this._currentStatus;
-    }
-    private set currentStatus(value: ProjectorMainStatus) {
-        this._currentStatus = value;
-    }
+    private state = new ProjectorState();
 
-    private _channels: Channel[] = [];
-    public get channels(): Channel[] {
-        return this._channels;
+    public get currentStatus(): Readonly<ProjectorMainStatus> {
+        return readonly(this.state.status.value);
     }
-    private set channels(value: Channel[]) {
-        this._channels = value;
+    public get channels(): Readonly<Channel[]> {
+        return readonly(this.state.channels.value);
+    }
+    public get authenticated(): boolean {
+        return this.state.authenticated.value;
     }
 
-    public authenticated = false;
-
-    public events: TypeSafeEventEmitter<Events> = new EventEmitter();
-
+    private endpoint: string;
     constructor(
-        private host: string,
+        host: string,
         private settings: ProjectorSettings = {},
     ) {
-        if (!this.host.startsWith("http")) {
-            this.host = `http://${this.host}`;
+        this.endpoint = stringifyParsedURL(parseURL(host, "http://"));
+        if (this.endpoint === "http://") {
+            throw Error(`Could not parse host: ${JSON.stringify(host)}`);
         }
-        this.api = axios.create({
-            baseURL: this.host,
-            headers: {
-                "content-type": "text/xml; charset=UTF-8",
-            },
-        });
+
+        if (settings.disableCache) {
+            this.cache = new ResultCache(0, true);
+        } else if (settings.cacheTTL != null) {
+            this.cache = new ResultCache(settings.cacheTTL);
+        } else {
+            this.cache = new ResultCache(10);
+        }
     }
 
     public async logIn(username: string, password: string): Promise<boolean> {
@@ -62,194 +61,183 @@ export class Projector {
             username,
             password,
         });
-        if (res && res.status == 200) {
+        if (res.success) {
             const token = res.data["ns:loginResponse"]?.token;
             if (token) {
                 this.token = token;
-                this.authenticated = true;
-                this.events.emit("authentication", this.authenticated);
 
-                if (this.settings.getChannelsOnLogin !== false) {
-                    this.getChannels();
-                }
+                if (this.settings.getChannelsOnLogin) await this.getChannels();
+                if (this.settings.getStatusOnLogin) await this.getStatus();
 
-                if (this.settings.getStatusOnLogin !== false) {
-                    this.getStatus();
-                }
-
-                return this.authenticated;
+                return (this.state.authenticated.value = true);
             }
-            this.events.emit("authentication", false);
-            return false;
+            return (this.state.authenticated.value = false);
         }
-        this.events.emit("authentication", false);
-        return false;
+        throw Error("Error authenticating", { cause: res });
     }
 
-    public getStatus(): Promise<ProjectorMainStatus> {
-        if (!this.token) {
-            throw new Error("Tried getting status without token.");
-        }
-        return new Promise<ProjectorMainStatus>(async (resolve, reject) => {
-            const res = await this.request("cinemaprojector", "getMainStatus");
-
-            if (res && res.status == 200) {
-                const status = res.data?.Notification as ProjectorMainStatus;
-
-                const oldStatus = this.currentStatus;
-                this.currentStatus = status;
-                resolve(status);
-
-                if (!deepEqual(status, oldStatus)) {
-                    this.events.emit("status", status);
-                    if (this.currentStatus?.powerOn !== oldStatus?.powerOn) {
-                        this.events.emit(
-                            "power",
-                            this.currentStatus?.powerOn ?? -1,
-                        );
+    private statusInterval?: SetIntervalAsyncTimer<[]>;
+    public startStatusInterval(): void {
+        const log = debug("christie:interval");
+        watch(
+            this.state.authenticated,
+            (isAuth) => {
+                if (isAuth) {
+                    if (!this.statusInterval) {
+                        log("Starting status interval");
+                        this.getChannels();
+                        this.getStatus();
+                        this.statusInterval = setIntervalAsync(async () => {
+                            log("Requesting status on interval");
+                            await Promise.allSettled([this.getChannels(), this.getStatus()]);
+                        }, 30_000);
                     }
-                    if (this.currentStatus?.douserOn !== oldStatus?.douserOn) {
-                        this.events.emit(
-                            "douser",
-                            this.currentStatus?.douserOn ?? -1,
-                        );
-                    }
-                    if (this.currentStatus?.lampOn !== oldStatus?.lampOn) {
-                        this.events.emit(
-                            "lamp",
-                            this.currentStatus?.lampOn ?? -1,
-                        );
-                    }
-                    if (
-                        this.currentStatus?.alarmLevel !== oldStatus?.alarmLevel
-                    ) {
-                        this.events.emit(
-                            "alarm",
-                            this.currentStatus?.alarmLevel ?? 0,
-                        );
-                    }
-                    if (
-                        this.currentStatus?.activeIndex !==
-                        oldStatus?.activeIndex
-                    ) {
-                        this.events.emit(
-                            "activeChannel",
-                            this.currentStatus?.activeIndex ?? 0,
-                        );
+                } else {
+                    if (this.statusInterval) {
+                        log("Stopping status interval");
+                        clearIntervalAsync(this.statusInterval);
                     }
                 }
-            }
-            reject();
-        });
+            },
+            { immediate: true },
+        );
+    }
+
+    public async getStatus(): Promise<ProjectorMainStatus> {
+        return (
+            this.cache.get<ProjectorMainStatus>("status") ??
+            this.cache.store("status", this._getStatus())
+        );
+    }
+    private async _getStatus(): Promise<ProjectorMainStatus> {
+        if (!this.token) {
+            throw Error("Tried getting status without token.");
+        }
+        const res = await this.request("cinemaprojector", "getMainStatus");
+
+        if (res.success) {
+            const status = res.data.Notification as ProjectorMainStatus;
+
+            if (!deepEqual(toRaw(this.state.status.value), status))
+                this.state.status.value = status;
+
+            return status;
+        }
+        throw Error("Error getting the status of the projector", { cause: res });
     }
 
     public async setPower(power: boolean): Promise<void> {
         if (!this.token) {
-            console.error("Tried getting status without token.");
-            return;
+            throw Error("Tried getting status without token.");
         }
 
-        const res = await this.request(
-            "cinemaprojector",
-            "enableProjectorPower",
-            {
-                power: power ? 1 : 0,
-            },
-        );
+        const res = await this.request("cinemaprojector", "enableProjectorPower", {
+            power: power ? 1 : 0,
+        });
 
-        if (
-            res &&
-            res.data &&
-            res.data["ns:enableProjectorPowerResponse"]?.result !== 0
-        ) {
-            throw new Error("Set power did not succeed", res.data);
+        if (res.success) {
+            if (res.data["ns:enableProjectorPowerResponse"]?.result !== 0) {
+                throw Error(`Set power to ${power} did not succeed`, res.data);
+            } else {
+                this.cache.invalidate("status");
+            }
+        } else {
+            throw Error("Error setting the power of the projector", { cause: res });
         }
     }
 
     public async setDouser(open: boolean): Promise<void> {
         if (!this.token) {
-            console.error("Tried getting status without token.");
-            return;
+            throw Error("Tried getting status without token.");
         }
 
         const res = await this.request("cinemaprojector", "setDouserPosition", {
-            token: this.token,
             douser: open ? 0 : 1, // 0 is open
         });
 
-        if (
-            res &&
-            res.data &&
-            res.data["ns:setDouserPositionResponse"]?.result !== 0
-        ) {
-            throw new Error("Set douser did not succeed", res.data);
+        if (res.success) {
+            if (res.data["ns:setDouserPositionResponse"]?.result !== 0) {
+                throw Error(`Set douser to ${open} did not succeed`, res.data);
+            } else {
+                this.cache.invalidate("status");
+            }
+        } else {
+            throw Error("Error setting the douser of the projector", { cause: res });
         }
     }
 
     public async setLamp(on: boolean): Promise<void> {
         const res = await this.request("cinemaprojector", "enableLamp", {
-            token: this.token,
             lamp: on ? 1 : 0,
         });
 
-        if (
-            res &&
-            res.data &&
-            res.data["ns:enableLampResponse"]?.result !== 0
-        ) {
-            throw new Error("Set lamp did not succeed", res.data);
+        if (res.success) {
+            if (res.data["ns:enableLampResponse"]?.result !== 0) {
+                throw Error(`Set lamp to ${on} did not succeed`, res.data);
+            } else {
+                this.cache.invalidate("status");
+            }
+        } else {
+            throw Error("Error setting the lamp of the projector", { cause: res });
         }
     }
 
     public async getChannels(): Promise<Channel[]> {
+        return (
+            this.cache.get<Channel[]>("getChannels") ??
+            this.cache.store("getChannels", this._getChannels())
+        );
+    }
+    private async _getChannels(): Promise<Channel[]> {
         const res = await this.request("cinemaprojector", "getAllChannels", {
-            token: this.token,
             start: 1,
             end: 65,
         });
 
-        if (res && res.data) {
+        if (res.success) {
             const items = (res.data.arrayofChannels?.item as any[]) ?? [];
-            this.channels = items.map<Channel>((item: any) => ({
+            const newChannels = items.map<Channel>((item: any) => ({
                 index: item.index,
                 name: item.name,
                 use3D: item.use3d == 1,
                 ILSOn: item.ilson !== 0,
                 icon: item.icon,
             }));
-            this.events.emit("channels", this.channels);
-            return this.channels;
+
+            if (!deepEqual(toRaw(this.state.channels.value), newChannels))
+                this.state.channels.value = newChannels;
+
+            return newChannels;
         }
-        return [];
+        throw Error("Error getting the channels of the projector", { cause: res });
     }
 
     public async setChannel(index: number): Promise<void> {
         if (index > 64 || index < 1) {
-            throw new Error("Channel index out of range, range is 1-64");
+            throw Error("Channel index out of range, range is 1-64");
         }
-        const res = await this.request(
-            "cinemaprojector",
-            "setChannelActiveIndex",
-            {
-                token: this.token,
-                index: index,
-            },
-        );
+        const res = await this.request("cinemaprojector", "setChannelActiveIndex", {
+            index: index,
+        });
 
-        if (
-            res &&
-            res.data &&
-            res.data["ns:setChannelActiveIndexResponse"]?.result !== index
-        ) {
-            throw new Error("Set channel did not succeed", res.data);
+        if (res.success) {
+            if (res.data["ns:setChannelActiveIndexResponse"]?.result !== index) {
+                throw Error(`Set channel to ${index} did not succeed`, res.data);
+            } else {
+                this.cache.invalidate("status");
+            }
+        } else {
+            throw Error("Error setting the channel of the projector", { cause: res });
         }
     }
 
     private async request(
         namespace: string,
         action: string,
-        bodyJson: Record<string, unknown> = {},
-    ) {
+        data: Record<string, unknown> = {},
+    ): Promise<Response> {
+        const log = debug("christie:request");
+        log("Sending request to namespace", namespace, "with action", action, "and data", data);
         const body = this.xmlBuilder.build({
             "?xml": { "@_version": "1.0", "@_encoding": "utf-8" },
             "soap:Envelope": {
@@ -257,7 +245,7 @@ export class Projector {
                     [action]: {
                         token: this.token,
                         "@_xmlns": `urn:${namespace}`,
-                        ...bodyJson,
+                        ...data,
                     },
                 },
                 "@_xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
@@ -266,20 +254,38 @@ export class Projector {
             },
         });
 
-        try {
-            const req = await this.api.post<any>("/" + namespace, body, {
-                headers: {
-                    SOAPAction: `urn:${namespace}/${action}`,
-                },
-                responseType: "text",
-            });
-            req.data = this.xmlParser.parse(req.data)?.["SOAP-ENV:Envelope"]?.[
-                "SOAP-ENV:Body"
-            ];
-            return req;
-        } catch (error) {
-            console.error(error);
-            return undefined;
-        }
+        const headers = new Headers();
+        headers.append("SOAPAction", `urn:${namespace}/${action}`);
+        headers.append("content-type", "text/xml; charset=UTF-8");
+
+        const fetchResponse = await fetch(joinURL(this.endpoint, namespace), {
+            headers,
+            method: "POST",
+            body,
+            keepalive: true,
+        });
+        const textData = await fetchResponse.text();
+        const responseData =
+            this.xmlParser.parse(textData)?.["SOAP-ENV:Envelope"]?.["SOAP-ENV:Body"];
+        log(`Response to ${namespace}:${action}:`, responseData);
+        return {
+            data: responseData,
+            success: !!responseData && fetchResponse.ok,
+            originalResponse: fetchResponse,
+        };
     }
+
+    stopStatusInterval(): void {
+        if (this.statusInterval) clearIntervalAsync(this.statusInterval);
+    }
+
+    [Symbol.dispose](): void {
+        this.stopStatusInterval();
+    }
+}
+
+export interface Response {
+    data: any;
+    success: boolean;
+    originalResponse: globalThis.Response;
 }

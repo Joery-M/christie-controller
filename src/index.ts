@@ -1,2 +1,2 @@
-export * from "./Projector";
+export { Projector } from "./Projector";
 export * from "./types";

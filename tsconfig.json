@@ -6,6 +6,8 @@
         "isolatedModules": true,
         "isolatedDeclarations": true,
         "declaration": true,
+        "declarationMap": true,
+        "strict": true,
         "types": ["node"]
     },
     "references": [{ "path": "./tsconfig.node.json" }]
