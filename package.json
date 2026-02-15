@@ -20,7 +20,8 @@
     },
     "scripts": {
         "dev": "tsdown -w",
-        "build": "tsdown"
+        "build": "tsdown",
+        "prepack": "pnpm build"
     },
     "keywords": [
         "Cinema",
