@@ -4,6 +4,9 @@
     "description": "A simple package for controlling Christie cinema projectors",
     "types": "./dist/index.d.ts",
     "type": "module",
+    "files": [
+        "dist"
+    ],
     "exports": {
         ".": {
             "dev": "./src/index.ts",
